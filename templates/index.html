@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed KV Store Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f9; color: #333; }
+        h1 { color: #2c3e50; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        
+        .card { background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
+        .card h2 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; font-size: 1.2em; color: #34495e; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; transition: background 0.3s; }
+        button:hover { background-color: #2980b9; }
+        button.delete { background-color: #e74c3c; }
+        button.delete:hover { background-color: #c0392b; }
+        
+        #result-area { margin-top: 10px; padding: 10px; background: #ecf0f1; border-radius: 4px; display: none; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
+        
+        .node-status { display: flex; gap: 20px; }
+        .node-box { flex: 1; padding: 15px; background: #fff; border: 1px solid #ddd; border-radius: 6px; }
+        .success { color: green; }
+        .error { color: red; }
+
+        .monitor-refresh { float: right; font-size: 0.8em; text-decoration: underline; cursor: pointer; color: blue; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Distributed Key-Value</h1>
+
+    <div class="card">
+        <h2>Operation</h2>
+        <div class="form-group">
+            <label>Chọn Node để kết nối</label>
+            <select id="nodeSelect">
+                {% for node in nodes %}
+                <option value="{{ node.id }}">{{ node.id }} ({{ node.address }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Key</label>
+            <input type="text" id="keyInput" placeholder="Enter key (e.g., student_id)">
+        </div>
+        <div class="form-group">
+            <label>Value (Only for PUT)</label>
+            <input type="text" id="valueInput" placeholder="Enter value (e.g., Nguyen Van A)">
+        </div>
+        <div>
+            <button onclick="doPut()">PUT (Ghi)</button>
+            <button onclick="doGet()" style="background-color: #2ecc71;">GET (Đọc)</button>
+            <button onclick="doDelete()" class="delete">DELETE (Xóa)</button>
+        </div>
+        <div id="result-area"></div>
+    </div>
+
+    <div class="card">
+        <h2>Giám Sát Hệ Thống <span class="monitor-refresh" onclick="fetchMonitor()">Refresh</span></h2>
+        <div id="monitor-area" class="node-status">
+            Loading...
+        </div>
+    </div>
+
+</div>
+
+<script>
+    async function doPut() {
+        const key = document.getElementById('keyInput').value;
+        const value = document.getElementById('valueInput').value;
+        const nodeId = document.getElementById('nodeSelect').value;
+        if(!key) return alert("Key is required");
+        
+        try {
+            const res = await fetch('/api/put', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({key, value, node_id: nodeId})
+            });
+            const data = await res.json();
+            showResult(data.success ? 'success' : 'error', data.message || "Saved!");
+            fetchMonitor();
+        } catch(e) {
+            showResult('error', e.toString());
+        }
+    }
+
+    async function doGet() {
+        const key = document.getElementById('keyInput').value;
+        const nodeId = document.getElementById('nodeSelect').value;
+        if(!key) return alert("Key is required");
+
+        try {
+            const res = await fetch(`/api/get?key=${key}&node_id=${nodeId}`);
+            const data = await res.json();
+            if (data.success) {
+                showResult('success', `Found: ${data.value}`);
+            } else {
+                showResult('error', data.message);
+            }
+        } catch(e) {
+            showResult('error', e.toString());
+        }
+    }
+
+    async function doDelete() {
+        const key = document.getElementById('keyInput').value;
+        const nodeId = document.getElementById('nodeSelect').value;
+        if(!key) return alert("Key is required");
+
+        try {
+            const res = await fetch('/api/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({key, node_id: nodeId})
+            });
+            const data = await res.json();
+            showResult(data.success ? 'success' : 'error', data.message);
+            fetchMonitor();
+        } catch(e) {
+            showResult('error', e.toString());
+        }
+    }
+
+
+    function showResult(type, msg) {
+        const div = document.getElementById('result-area');
+        div.style.display = 'block';
+        div.style.color = type === 'success' ? '#27ae60' : '#c0392b';
+        div.innerText = msg;
+    }
+
+    async function fetchMonitor() {
+        try {
+            const res = await fetch('/api/debug/data');
+            const data = await res.json();
+            let html = '';
+            for (const [nodeId, content] of Object.entries(data)) {
+                let itemsHtml = '<ul>';
+                if (content.error) {
+                    itemsHtml += `<li style="color:red">OFFLINE</li>`;
+                } else {
+                    const keys = Object.keys(content);
+                    if (keys.length === 0) itemsHtml += '<li>(Empty)</li>';
+                    else keys.forEach(k => {
+                        itemsHtml += `<li><b>${k}</b>: ${content[k]}</li>`;
+                    });
+                }
+                itemsHtml += '</ul>';
+                
+                html += `
+                <div class="node-box">
+                    <h3>${nodeId}</h3>
+                    ${itemsHtml}
+                </div>
+                `;
+            }
+            document.getElementById('monitor-area').innerHTML = html;
+        } catch(e) {
+            console.error(e);
+        }
+    }
+
+    // Auto load
+    setInterval(fetchMonitor, 5000);
+    fetchMonitor();
+</script>
+
+</body>
+</html>

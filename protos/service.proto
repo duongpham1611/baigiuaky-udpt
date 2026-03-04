@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package kvstore;
+
+// Dịch vụ dành cho Client tương tác
+service KVService {
+  rpc Put (PutRequest) returns (PutResponse);
+  rpc Get (GetRequest) returns (GetResponse);
+  rpc Delete (DeleteRequest) returns (DeleteResponse);
+}
+
+// Dịch vụ nội bộ giữa các Node
+service InternalService {
+  rpc Replicate (ReplicateRequest) returns (ReplicateResponse);
+  rpc Heartbeat (HeartbeatRequest) returns (HeartbeatResponse);
+  rpc RequestSnapshot (SnapshotRequest) returns (SnapshotResponse);
+}
+
+message PutRequest {
+  string key = 1;
+  string value = 2;
+}
+
+message PutResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetRequest {
+  string key = 1;
+}
+
+message GetResponse {
+  bool found = 1;
+  string value = 2;
+  string leader_address = 3; // Redirect nếu cần
+}
+
+message DeleteRequest {
+  string key = 1;
+}
+
+message DeleteResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ReplicateRequest {
+    string key = 1;
+    string value = 2;
+    string op = 3; // "PUT" or "DELETE"
+    string owner = 4; // Node ID of the primary owner
+}
+
+
+message ReplicateResponse {
+    bool success = 1;
+}
+
+message HeartbeatRequest {
+    string node_id = 1;
+}
+
+message HeartbeatResponse {
+    bool alive = 1;
+}
+
+message SnapshotRequest {
+    string node_id = 1;
+}
+
+message SnapshotResponse {
+    map<string, string> data = 1;
+}
