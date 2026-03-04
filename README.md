@@ -1,6 +1,6 @@
-# Distributed Key-Value Store (UDPT Middle-term Project)
+# Distributed Key-Value Store
 
-Dự án này triển khai một hệ thống lưu trữ **Key-Value phân tán** đơn giản bằng Python, sử dụng gRPC để giao tiếp giữa các node và hỗ trợ nhân bản dữ liệu (Replication), duy trì sự sống (Heartbeat), và đồng bộ trạng thái (Snapshot).
+Dự án này triển khai một hệ thống lưu trữ **Key-Value phân tán** đơn giản bằng Python, sử dụng gRPC để giao tiếp giữa các node
 
 ## 🚀 Tính năng chính
 
